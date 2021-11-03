@@ -731,7 +731,6 @@ class tqdm(Comparable):
             from pandas.core.groupby.groupby import GroupBy
         except ImportError:  # pragma: no cover
             from pandas.core.groupby import GroupBy
-
         try:  # pandas>=0.23.0
             from pandas.core.groupby.groupby import PanelGroupBy
         except ImportError:
@@ -739,6 +738,10 @@ class tqdm(Comparable):
                 from pandas.core.groupby import PanelGroupBy
             except ImportError:  # pandas>=0.25.0
                 PanelGroupBy = None
+        try:
+            from xarray.core.groupby import DataArrayGroupBy, DatasetGroupBy
+        except ImportError:
+            DataArrayGroupBy = DatasetGroupBy = None
 
         tqdm_kwargs = tqdm_kwargs.copy()
         deprecated_t = [tqdm_kwargs.pop('deprecated_t', None)]
@@ -761,7 +764,8 @@ class tqdm(Comparable):
                 if total is None:  # not grouped
                     if df_function == 'applymap':
                         total = df.size
-                    elif isinstance(df, Series):
+                    elif isinstance(df, tuple(filter(None, (
+                            Series, DataArrayGroupBy, DatasetGroupBy)))):
                         total = len(df)
                     elif (_Rolling_and_Expanding is None or
                           not isinstance(df, _Rolling_and_Expanding)):
@@ -795,8 +799,8 @@ class tqdm(Comparable):
                 except ImportError:
                     is_builtin_func = df._is_builtin_func
                 try:
-                    func = is_builtin_func(func)
-                except TypeError:
+                    func = df._is_builtin_func(func)
+                except (TypeError, AttributeError):
                     pass
 
                 # Define bar updating wrapper
@@ -843,6 +847,9 @@ class tqdm(Comparable):
         elif _Rolling_and_Expanding is not None:
             _Rolling_and_Expanding.progress_apply = inner_generator()
 
+        for Array in filter(None, (DataArrayGroupBy, DatasetGroupBy)):
+            Array.progress_apply = inner_generator()
+
     def __init__(self, iterable=None, desc=None, total=None, leave=True, file=None,
                  ncols=None, mininterval=0.1, maxinterval=10.0, miniters=None,
                  ascii=None, disable=False, unit='it', unit_scale=False,
@@ -850,6 +857,7 @@ class tqdm(Comparable):
                  position=None, postfix=None, unit_divisor=1000, write_bytes=None,
                  lock_args=None, nrows=None, colour=None, delay=0, gui=False,
                  **kwargs):
+
         """
         Parameters
         ----------
